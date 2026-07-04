@@ -18,7 +18,55 @@ import type { DreamaAuth } from '../http/middleware/dreama-auth.js'
 import type { CreateFlowInput, CreateFlowOutput } from '../routes/flow.js'
 import { getConfig } from '../config.js'
 import { createCyapiClient } from './cyapi-client.js'
-import { buildStudioSaveBody } from './pipe-save-builder.js'
+import { buildStudioSaveBody, type StudioPipeSaveBody } from './pipe-save-builder.js'
+
+function buildPipeUpdateBody(
+  input: CreateFlowInput,
+  saveBody: StudioPipeSaveBody,
+  pipeId: string,
+): Record<string, unknown> {
+  return {
+    id: pipeId,
+    name: input.name,
+    cover: input.cover_url ?? null,
+    summary: input.summary ?? '',
+    summary_markup: input.summary ?? '',
+    inParam: JSON.stringify(saveBody.data.pipe.in_param),
+    outParam: JSON.stringify(saveBody.data.pipe.out_param),
+    chainIds: Object.keys(saveBody.data.chain),
+  }
+}
+
+function collectTextsForRiskCheck(input: CreateFlowInput): string[] {
+  const texts = new Set<string>()
+
+  const addText = (value: string | undefined): void => {
+    const text = value?.trim()
+    if (!text || text.length > 4096) return
+    texts.add(text)
+  }
+
+  addText(input.name)
+  addText(input.summary)
+
+  for (const greeting of input.greetings) {
+    addText(greeting.content)
+    if (greeting.type === 'system') {
+      addText(greeting.title)
+    }
+    if (greeting.type === 'role') {
+      for (const button of greeting.user_btns ?? []) addText(button)
+    }
+  }
+
+  for (const turn of input.preset_turns) {
+    addText(turn.reply)
+    for (const button of turn.buttons) addText(button)
+  }
+
+  addText(input.story.background)
+  return [...texts]
+}
 
 export async function createFlow(
   input: CreateFlowInput,
@@ -46,11 +94,14 @@ export async function createFlow(
   })
 
   await client.pipeSave(auth, saveBody)
-
-  // TODO codex（PR#5）: 在 pipeSave 后加 pipeUpdate；在 pipeCreatorSubmit 前加 riskControlTxtBatch
+  await client.pipeUpdate(auth, buildPipeUpdateBody(input, saveBody, pipeId))
   await client.pipeInitchat(auth, pipeId)
 
   if (input.publish) {
+    const { rejected } = await client.riskControlTxtBatch(auth, collectTextsForRiskCheck(input))
+    if (rejected.length > 0) {
+      throw new BizError('CONTENT_REJECTED', '内容命中风控', { details: { rejected } })
+    }
     await client.pipeCreatorSubmit(auth, pipeId)
   }
 
