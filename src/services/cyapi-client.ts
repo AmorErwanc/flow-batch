@@ -263,6 +263,43 @@ function findGlobalAttrId(data: Record<string, unknown>): string | undefined {
   return globalAttr ? readStringField(globalAttr, 'id') : undefined
 }
 
+function isRejectedRiskItem(item: Record<string, unknown>): boolean {
+  return item.rejected === true || item.reject === true || item.hit === true || item.blocked === true
+}
+
+function readRiskText(item: Record<string, unknown>, fallback: string | undefined): string | undefined {
+  return readFirstStringField(item, ['text', 'content', 'value', 'originalText', 'originText']) ?? fallback
+}
+
+function normalizeRejectedTexts(values: unknown[], sourceTexts: string[]): string[] {
+  const rejected = new Set<string>()
+  values.forEach((value, index) => {
+    if (typeof value === 'string' && value.length > 0) {
+      rejected.add(value)
+      return
+    }
+    if (isRecord(value) && isRejectedRiskItem(value)) {
+      const text = readRiskText(value, sourceTexts[index])
+      if (text) rejected.add(text)
+    }
+  })
+  return [...rejected]
+}
+
+function parseRiskCheckResult(data: unknown, sourceTexts: string[]): { rejected: string[] } {
+  if (Array.isArray(data)) {
+    return { rejected: normalizeRejectedTexts(data, sourceTexts) }
+  }
+
+  if (!isRecord(data)) return { rejected: [] }
+  const rejected = data.rejected
+  if (Array.isArray(rejected)) {
+    return { rejected: normalizeRejectedTexts(rejected, sourceTexts) }
+  }
+
+  return { rejected: [] }
+}
+
 export function createCyapiClient(baseUrl: string, studioBaseUrl: string): CyapiClient {
   const cyapiBaseUrl = normalizeBaseUrl(baseUrl)
   const studioNodeapiBaseUrl = normalizeBaseUrl(studioBaseUrl)
@@ -366,9 +403,27 @@ export function createCyapiClient(baseUrl: string, studioBaseUrl: string): Cyapi
       })
     },
 
-    async riskControlTxtBatch(_auth, _texts) {
-      // PR#5 联调阶段再用浏览器抓包补真实 body；当前 PR 不阻塞作品创建。
-      return { rejected: [] }
+    async riskControlTxtBatch(auth, texts) {
+      if (texts.length === 0) return { rejected: [] }
+
+      // 造梦次元此接口 body 结构未通过 devtools 抓包，按最常见格式送。
+      // 联调阶段若失败会走降级放行，据实际错误再纠正 body。
+      const body = { texts }
+
+      try {
+        const data = await requestEnvelope<unknown>('cyapi', cyapiBaseUrl, {
+          auth,
+          method: 'POST',
+          path: '/risk/control/txt/batch',
+          body,
+        })
+        return parseRiskCheckResult(data, texts)
+      } catch (error) {
+        // 风控接口暂不 block 提审；只有明确命中才由上层抛 CONTENT_REJECTED。
+        if (error instanceof BizError && error.code === 'DREAMA_TOKEN_INVALID') throw error
+        console.warn('riskControlTxtBatch failed, allow submit temporarily', error)
+        return { rejected: [] }
+      }
     },
 
     async attachUpload(auth, keyPath, file, filename) {
