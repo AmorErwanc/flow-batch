@@ -33,14 +33,47 @@
  *   - cartoon/save 401 → throw new BizError('DREAMA_TOKEN_INVALID', '登录已过期')
  *   - cartoon/save 其他非 2xx / code !== 0 → throw new BizError('UPSTREAM_CYAPI_FAILED', ...)
  */
-import { BizError } from '../lib/errors.js'
 import type { DreamaAuth } from '../http/middleware/dreama-auth.js'
 import type { CreateCharacterInput, CreateCharacterOutput } from '../routes/character.js'
+import { getConfig } from '../config.js'
+import { GENDER_TO_TIMBRE_TYPE } from '../constants/studio-units.js'
+import { BizError } from '../lib/errors.js'
+import { createCyapiClient } from './cyapi-client.js'
 
 export async function createCharacter(
-  _input: CreateCharacterInput,
-  _auth: DreamaAuth,
+  input: CreateCharacterInput,
+  auth: DreamaAuth,
 ): Promise<CreateCharacterOutput> {
-  // TODO codex: 按上面 doc 实现
-  throw new BizError('NOT_IMPLEMENTED', 'PR#3 待实现：snowid + timbre + cartoon/save')
+  const config = getConfig()
+  const client = createCyapiClient(config.CYAPI_BASE_URL, config.STUDIO_NODEAPI_BASE_URL)
+
+  const preId = await client.applySnowId(auth)
+  let finalTimbreId = input.timbre_id
+
+  if (!finalTimbreId) {
+    const timbreType = GENDER_TO_TIMBRE_TYPE[input.gender]
+    const timbres = await client.listTimbres(auth, timbreType)
+    const defaultTimbre = timbres[0]
+    if (!defaultTimbre?.id) {
+      throw new BizError('UPSTREAM_CYAPI_FAILED', '下游 cyapi 未返回可用默认音色')
+    }
+    finalTimbreId = defaultTimbre.id
+  }
+
+  const saved = await client.saveCartoon(auth, {
+    type: 'normal',
+    id: preId,
+    name: input.name,
+    gender: input.gender,
+    avatar: input.avatar_url,
+    banner: input.banner_url,
+    summary: input.summary,
+    character: input.character,
+    locution: input.locution,
+    timbreId: finalTimbreId,
+    isAiGenerated: String(input.is_ai_gen),
+    bannerIsAiGenerated: String(input.banner_is_ai),
+  })
+
+  return { character_id: saved.id }
 }
