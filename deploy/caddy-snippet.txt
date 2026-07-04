@@ -1,0 +1,20 @@
+# Caddy 反代片段，加到 ideaflow-tools 上 Caddyfile 里 tools.ideaflow.pro 那个块下
+# 位置参考：现有 llm-api 的反代规则相邻处
+
+# ─────────── flow-batch ───────────
+handle /flow-batch/* {
+    reverse_proxy 127.0.0.1:3010 {
+        header_up Host {upstream_hostport}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+    }
+}
+
+# 部署后验证：
+#   curl -X POST https://tools.ideaflow.pro/flow-batch/image \
+#     -H "Authorization: metatube-<白石 JWT>" -H "Uid: 000004550035214806040581" \
+#     -H "Content-Type: application/json" \
+#     -d '{"prompt":"测试","aspect_ratio":"2048x2048","max_images":1}'
+#
+# 不带 Authorization 应返 401；不带 ROLE_SUP_CREATOR 也返 401

@@ -1,0 +1,57 @@
+# flow-batch · 部署 compose
+#
+# 目标机器：ideaflow-tools（火山 4h16g）
+# 路径：/home/ubuntu/docker-services/flow-batch/
+# 反代：Caddy 转 tools.ideaflow.pro/flow-batch/* → 127.0.0.1:${PORT}
+#
+# 部署方式（跟 llm-api 保持一致）：
+#   1. 首次：scp -r . flow@ideaflow-tools:/home/ubuntu/docker-services/flow-batch/
+#   2. 上机器：cd /home/ubuntu/docker-services/flow-batch/
+#      cp .env.example .env  # 改 LLM_API_KEY / 域名
+#      docker compose build && docker compose up -d
+#   3. 后续：GitHub Actions push deploy 分支自动部署（见 .github/workflows/deploy.yml）
+
+services:
+  flow-batch:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: flow-batch:latest
+    container_name: flow-batch
+    restart: unless-stopped
+    ports:
+      # 只监听 127.0.0.1，由 Caddy 反代到公网
+      - "127.0.0.1:3010:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      LOG_LEVEL: info
+
+      # 下游 LLM 网关（同机器内 docker network 直连 llm-api 容器）
+      LLM_API_BASE_URL: http://llm-api:8000
+      LLM_API_KEY: ${LLM_API_KEY}
+
+      # 造梦次元 API
+      CYAPI_BASE_URL: https://cyapi.ideaflow.pro
+      STUDIO_NODEAPI_BASE_URL: https://studio.ideaflow.pro/nodeapi/ideaflow
+
+      # Loki（同机器 loki 容器）
+      LOKI_HOST: http://loki:3100
+      LOKI_LABELS_APP: flow-batch
+      LOKI_LABELS_ENV: prod
+
+    networks:
+      - ideaflow-tools
+
+    healthcheck:
+      # 内部 healthcheck 不带鉴权（health 是 auth 白名单）
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/flow-batch/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+networks:
+  # 加入 ideaflow-tools 已有网络，才能内网访问 llm-api / loki 容器
+  ideaflow-tools:
+    external: true
+    name: ideaflow-tools_default

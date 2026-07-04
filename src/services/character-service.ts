@@ -1,0 +1,46 @@
+/**
+ * 创建角色 service · PR#3 · 骨架（业务由 codex 实现）
+ *
+ * 流程（照 `docs/api-spec.md` §「接口 1」）：
+ *   1. GET `${CYAPI_BASE_URL}/cutebox/snowid`
+ *      Headers: Authorization + Uid（透传 auth）+ 造梦次元通用 c/env/pg header
+ *      → response.data (24 位字符串，作为预申请 id)
+ *
+ *   2. 若 input.timbre_id 未指定：
+ *      GET `${CYAPI_BASE_URL}/cartoon/timbre?type={M|F|all}`
+ *        - 性别 '男' → M
+ *        - 性别 '女' → F
+ *        - 性别 '未知' → all
+ *      → response.data[] 取第一个作为默认音色
+ *
+ *   3. POST `${CYAPI_BASE_URL}/cartoon/save`
+ *      Body 用 CartoonParam schema（照 docs/apis/company-zmcy.md）：
+ *      {
+ *        type: 'normal',
+ *        id: 步骤 1 预申请 id,
+ *        name, gender, avatar (=input.avatar_url), banner (=input.banner_url),
+ *        summary, character, locution,
+ *        timbreId: input.timbre_id ?? 默认音色 id,
+ *        isAiGenerated: String(input.is_ai_gen),
+ *        bannerIsAiGenerated: String(input.banner_is_ai),
+ *      }
+ *
+ *   4. **关键**：从 response.data.id 读回真 role_id 返回，不是步骤 1 那个预申请 id
+ *      （造梦次元后端会忽略传入的 id 另分配一个新雪花，见 interface-design.md §5.5.①）
+ *
+ * 错误映射：
+ *   - snowid 非 2xx / code !== 0 → throw new BizError('UPSTREAM_CYAPI_FAILED', ...)
+ *   - cartoon/save 401 → throw new BizError('DREAMA_TOKEN_INVALID', '登录已过期')
+ *   - cartoon/save 其他非 2xx / code !== 0 → throw new BizError('UPSTREAM_CYAPI_FAILED', ...)
+ */
+import { BizError } from '../lib/errors.js'
+import type { DreamaAuth } from '../http/middleware/dreama-auth.js'
+import type { CreateCharacterInput, CreateCharacterOutput } from '../routes/character.js'
+
+export async function createCharacter(
+  _input: CreateCharacterInput,
+  _auth: DreamaAuth,
+): Promise<CreateCharacterOutput> {
+  // TODO codex: 按上面 doc 实现
+  throw new BizError('NOT_IMPLEMENTED', 'PR#3 待实现：snowid + timbre + cartoon/save')
+}
