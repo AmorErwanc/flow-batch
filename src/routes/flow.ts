@@ -72,6 +72,12 @@ const createFlowInputSchema = z.object({
   /** 内容分类标签 id（默认良维用「聊天」类） */
   tag_id: z.string().length(24).optional(),
   publish: z.boolean().default(true),
+  /**
+   * 提审时的"更新记录"字段（Studio UI 上必填）。
+   * 只在 publish=true 时生效；不传默认"初始发布"。
+   * 后续同一作品重新提审时可传"修改剧情节奏"等具体说明。
+   */
+  update_note: z.string().min(1).max(500).optional(),
 })
 
 export type CreateFlowInput = z.infer<typeof createFlowInputSchema>

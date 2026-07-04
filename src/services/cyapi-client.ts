@@ -36,6 +36,13 @@ export interface AudioTimbre {
 /** TODO codex: 具体实现由 PR#3/#4 补 */
 export interface CyapiClient {
   applySnowId(auth: DreamaAuth): Promise<string>
+  /**
+   * 批量申请雪花 id（用于 pipe/save 里所有 chain/wrapper/attr 的 id）。
+   * 关键：这些 id **必须是服务端分配的 24 位雪花**，本地 `id_<ts>` 格式 studio
+   * 虽然会接受但不会进 mgmt/pipe/audit/list 审核队列（2026-07-05 白石抓包对比确认）。
+   * 单次 n 最大 50（造梦次元后端限制）；需要更多要分批循环。
+   */
+  applySnowIds(auth: DreamaAuth, n: number): Promise<string[]>
   listTimbres(auth: DreamaAuth, type: 'M' | 'F' | 'all'): Promise<AudioTimbre[]>
   saveCartoon(auth: DreamaAuth, body: Record<string, unknown>): Promise<{ id: string }>
   getCartoonDetail(auth: DreamaAuth, cartoonId: string): Promise<CartoonDetail>
@@ -317,6 +324,23 @@ export function createCyapiClient(baseUrl: string, studioBaseUrl: string): Cyapi
       return id
     },
 
+    async applySnowIds(auth, n) {
+      if (n <= 0) return []
+      if (n > 50) throw new BizError('BAD_REQUEST', `单次批量申请雪花 id 上限 50，当前 ${n}`)
+      const data = await requestEnvelope<unknown>('cyapi', cyapiBaseUrl, {
+        auth,
+        path: `/cutebox/snowid?n=${n}`,
+      })
+      if (!Array.isArray(data)) {
+        throw new BizError('UPSTREAM_CYAPI_FAILED', '下游 cyapi 未返回批量雪花 id 数组')
+      }
+      const ids = data.filter((item): item is string => typeof item === 'string' && item.length > 0)
+      if (ids.length !== n) {
+        throw new BizError('UPSTREAM_CYAPI_FAILED', `批量雪花 id 数量不匹配：期望 ${n}，实际 ${ids.length}`)
+      }
+      return ids
+    },
+
     async listTimbres(auth, type) {
       const params = new URLSearchParams({ type })
       const data = await requestEnvelope<unknown>('cyapi', cyapiBaseUrl, {
@@ -435,10 +459,12 @@ export function createCyapiClient(baseUrl: string, studioBaseUrl: string): Cyapi
 
     async riskControlTxtBatch(auth, texts) {
       if (texts.length === 0) return { rejected: [] }
+      // 抓包 AI 2026-07-04 确认真实 body 结构：{txtList, type: "ugc_review"}
+      // 之前用 {texts:[...]} 是猜测的错字段名
 
       // 造梦次元此接口 body 结构未通过 devtools 抓包，按最常见格式送。
       // 联调阶段若失败会走降级放行，据实际错误再纠正 body。
-      const body = { texts }
+      const body = { txtList: texts, type: 'ugc_review' }
 
       try {
         const data = await requestEnvelope<unknown>('cyapi', cyapiBaseUrl, {

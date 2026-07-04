@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   client: {
     pipeAdd: vi.fn(),
     workStudioSave: vi.fn(),
+    applySnowIds: vi.fn(),
     getCartoonDetail: vi.fn(),
     pipeSave: vi.fn(),
     pipeUpdate: vi.fn(),
@@ -84,6 +85,10 @@ describe('flow-service', () => {
     })
     mocks.createCyapiClient.mockReturnValue(mocks.client)
     mocks.client.pipeAdd.mockResolvedValue({ id: PIPE_ID, globalAttrId: GLOBAL_ATTR_ID })
+    // 返回足够多的 dummy 雪花 id，让 pipe-save-builder 消费
+    mocks.client.applySnowIds.mockImplementation(async (_auth: unknown, n: number) =>
+      Array.from({ length: n }, (_, i) => `0000050837${String(i).padStart(14, '0')}`),
+    )
     mocks.client.getCartoonDetail.mockResolvedValue({
       id: ROLE_ID,
       name: '阿凯',

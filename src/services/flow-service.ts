@@ -18,7 +18,7 @@ import type { DreamaAuth } from '../http/middleware/dreama-auth.js'
 import type { CreateFlowInput, CreateFlowOutput } from '../routes/flow.js'
 import { getConfig } from '../config.js'
 import { createCyapiClient } from './cyapi-client.js'
-import { buildStudioSaveBody, type StudioPipeSaveBody } from './pipe-save-builder.js'
+import { buildStudioSaveBody, requiredSnowIdsCount, type StudioPipeSaveBody } from './pipe-save-builder.js'
 
 function buildPipeUpdateBody(
   input: CreateFlowInput,
@@ -91,6 +91,12 @@ export async function createFlow(
   // 顺序跟 Studio UI "新建内容" 抓包一致：pipe/add 之后立刻调。
   await client.workStudioSave(auth, pipeId)
 
+  // 批量申请雪花 id 给所有 chain/wrapper/attr 用。
+  // 关键：本地 id_<ts> 格式 studio 虽然接受但不入 mgmt 审核队列（2026-07-05 白石抓包对比确认）。
+  // 只有服务端分配的 24 位雪花 id 才被认为是"已持久化"的。
+  const snowIdCount = requiredSnowIdsCount(input.preset_turns.length)
+  const snowIds = await client.applySnowIds(auth, snowIdCount)
+
   const mainRole = await client.getCartoonDetail(auth, mainRoleId)
   const saveBody = buildStudioSaveBody({
     pipeId,
@@ -98,6 +104,7 @@ export async function createFlow(
     payload: input,
     mainRoleDetail: mainRole,
     userId: auth.uid,
+    snowIds,
   })
 
   await client.pipeSave(auth, saveBody)

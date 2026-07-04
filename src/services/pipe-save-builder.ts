@@ -50,6 +50,15 @@ export interface StudioPipeSaveBody {
   time: number
   data: StudioPipeData
   hash: number
+  /**
+   * 提审专用字段。
+   * 只在"提审"时带；普通"存草稿"时**不带**这个字段。
+   * `publish.log[].msg` = UI 上的"更新记录"，提审时必填（第一次提审时前端 UI 有校验）。
+   * 决定作品是否真正入审核队列（走 mgmt/pipe/audit/list 表）。
+   */
+  publish?: {
+    log: Array<{ msg: string }>
+  }
 }
 
 export interface StudioPipeData {
@@ -77,6 +86,19 @@ export interface BuildSaveBodyInput {
   mainRoleDetail: CartoonDetail
   /** 良维的 user_id（= payload.user_id）*/
   userId: string
+  /**
+   * 服务端分配的雪花 id 池，用于 chain/wrapper/attr 的 id。
+   * 关键：这些 id **必须是雪花格式**，本地 `id_<ts>` 格式虽然 studio 接受但不入 mgmt 审核队列。
+   * 需要数量 = turnCount * 4 + 15（storyChain + attr.round + 11 个 wrapper + constantGreetings）
+   * cartoons wrapper + tagPipe 允许用本地 id，不消耗池。
+   */
+  snowIds: string[]
+}
+
+/** 计算给定预设轮数需要多少个雪花 id */
+export function requiredSnowIdsCount(turnCount: number): number {
+  // storyChain 1 + chain per turn 4 + attr.round 1 + wrapper 11（含 constantGreetings）+ 0
+  return turnCount * 4 + 1 + 1 + 11
 }
 
 interface TurnChainIds {
@@ -97,7 +119,10 @@ interface WrapperIds {
   groupGreeting: string
   groupOut: string
   ROOT: string
+  /** cartoons wrapper 允许用本地 `id_<ts>` 格式（抓包实证前端保存时也是本地格式）*/
   cartoons: string
+  /** 常量开场白 wrapper，2026-07-05 抓包对比发现的必需字段 */
+  constantGreetings: string
 }
 
 interface AttrIds {
@@ -114,10 +139,11 @@ interface LocalIds {
 
 const DEFAULT_CHAT_TAG_ID = '000003882999195270660097'
 
-let idSeq = 0
+let localIdSeq = 0
 
+/** 本地 id 生成器（只用于 cartoons wrapper + tagPipe 这类前端动态生成场景）*/
 function genLocalId(): string {
-  const suffix = (idSeq++).toString().padStart(3, '0')
+  const suffix = (localIdSeq++).toString().padStart(3, '0')
   return `id_${Date.now()}${suffix}`
 }
 
@@ -129,34 +155,50 @@ function getMainRoleId(payload: CreateFlowInput): string {
   return roleId
 }
 
-function generateLocalIds(turnCount: number): LocalIds {
+function generateLocalIds(turnCount: number, snowIds: string[]): LocalIds {
+  const expected = requiredSnowIdsCount(turnCount)
+  if (snowIds.length < expected) {
+    throw new BizError('INTERNAL_SERVER_ERROR', `雪花 id 池数量不足：期望 ${expected}，实际 ${snowIds.length}`)
+  }
+  // 从雪花池顺序 consume
+  let cursor = 0
+  const take = (): string => {
+    const id = snowIds[cursor]
+    if (!id) throw new BizError('INTERNAL_SERVER_ERROR', '雪花 id 池已耗尽')
+    cursor += 1
+    return id
+  }
+
   const chainIds: TurnChainIds[] = []
   for (let i = 0; i < turnCount; i += 1) {
     chainIds.push({
-      cond: genLocalId(),
-      text: genLocalId(),
-      variable: genLocalId(),
-      jump: genLocalId(),
+      cond: take(),
+      text: take(),
+      variable: take(),
+      jump: take(),
     })
   }
 
   return {
-    storyChainId: genLocalId(),
+    storyChainId: take(),
     chainIds,
     wrapperIds: {
-      KEYS: genLocalId(),
-      bg: genLocalId(),
-      bgm: genLocalId(),
-      btn: genLocalId(),
-      tts: genLocalId(),
-      expression: genLocalId(),
-      greetings: genLocalId(),
-      groupGreeting: genLocalId(),
-      groupOut: genLocalId(),
-      ROOT: genLocalId(),
+      KEYS: take(),
+      bg: take(),
+      bgm: take(),
+      btn: take(),
+      tts: take(),
+      expression: take(),
+      greetings: take(),
+      groupGreeting: take(),
+      groupOut: take(),
+      ROOT: take(),
+      constantGreetings: take(),
+      // cartoons 允许本地 id
       cartoons: genLocalId(),
     },
-    attrIds: { round: genLocalId() },
+    attrIds: { round: take() },
+    // tagPipe 允许本地 id（前端首次保存后服务端会重新分配）
     tagPipeId: genLocalId(),
   }
 }
@@ -556,7 +598,37 @@ function buildWrapperMap(
       pipe_id: pipeId,
       content: [{ id: roleId, code: 'normal', sn: 1 }],
     },
+    [wrapperIds.constantGreetings]: {
+      id: wrapperIds.constantGreetings,
+      pipe_id: pipeId,
+      name: 'constantGreetings',
+      content: buildConstantGreetingsContent(payload, roleBanner),
+    },
   }
+}
+
+/**
+ * 常量开场白 wrapper（2026-07-05 抓包对比发现的必需字段）。
+ * 结构：
+ *   sys   = system 型开场白（title + 空格 + content）
+ *   init  = narration content + role 首句 content
+ *   bgImg = 角色 banner（用作聊天背景图 fallback）
+ */
+function buildConstantGreetingsContent(payload: CreateFlowInput, roleBanner: string): Record<string, unknown> {
+  const parts: { sys: string; init: string; bgImg: string } = { sys: '', init: '', bgImg: roleBanner }
+  const initSegments: string[] = []
+  for (const greeting of payload.greetings) {
+    if (greeting.type === 'system') {
+      const title = greeting.title?.trim() ? `${greeting.title} ` : ''
+      parts.sys = `${title}${greeting.content}`
+    } else if (greeting.type === 'narration') {
+      initSegments.push(greeting.content)
+    } else if (greeting.type === 'role') {
+      initSegments.push(greeting.content)
+    }
+  }
+  parts.init = initSegments.join('')
+  return parts
 }
 
 function buildAttrMap(attrIds: AttrIds, globalAttrId: string, pipeId: string): Record<string, unknown> {
@@ -702,7 +774,7 @@ function assembleSaveBody(input: BuildSaveBodyInput, ids: LocalIds): StudioPipeS
   const outParams = buildOutParams(input.payload, ids.chainIds, ids.storyChainId, roleId)
   const now = Date.now()
 
-  return {
+  const body: StudioPipeSaveBody = {
     user_id: input.userId,
     owner_id: input.userId,
     time: now,
@@ -719,14 +791,25 @@ function assembleSaveBody(input: BuildSaveBodyInput, ids: LocalIds): StudioPipeS
       $audio_library_rel: {},
       _WID: input.globalAttrId,
     },
-    hash: now + 1,
+    hash: now, // 实测 hash 跟 time 同值（抓包 AI 2026-07-04 确认）
   }
+
+  // 提审时才带 publish 字段。这个字段是"是否入审核队列"的开关：
+  // - 不带 → 只存草稿，creator/submit 后不入 mgmt 审核队列
+  // - 带 → 存 + 触发入队，之后 creator/submit 翻转状态
+  if (input.payload.publish) {
+    body.publish = {
+      log: [{ msg: input.payload.update_note ?? '初始发布' }],
+    }
+  }
+
+  return body
 }
 
 /**
  * 把良维友好 payload 翻译成 Studio pipe/save 的整体覆盖式保存 body。
  */
 export function buildStudioSaveBody(input: BuildSaveBodyInput): StudioPipeSaveBody {
-  const ids = generateLocalIds(input.payload.preset_turns.length)
+  const ids = generateLocalIds(input.payload.preset_turns.length, input.snowIds)
   return assembleSaveBody(input, ids)
 }

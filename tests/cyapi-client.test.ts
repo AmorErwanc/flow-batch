@@ -61,7 +61,10 @@ describe('cyapi-client riskControlTxtBatch', () => {
       Uid: AUTH.uid,
       'Content-Type': 'application/json',
     })
-    expect(JSON.parse(String(init.body))).toEqual({ texts: ['安全文本', '违规文本', '兜底文本'] })
+    expect(JSON.parse(String(init.body))).toEqual({
+      txtList: ['安全文本', '违规文本', '兜底文本'],
+      type: 'ugc_review',
+    })
   })
 
   it('兼容对象里 rejected 数组的响应形态', async () => {

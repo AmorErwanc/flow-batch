@@ -74,12 +74,17 @@ describe('pipe-save-builder', () => {
     vi.useFakeTimers()
     vi.setSystemTime(NOW)
 
+    // 3 轮预设需要 3*4 + 15 = 27 个雪花 id
+    const snowIds = Array.from({ length: 27 }, (_, i) =>
+      `0000050837${String(i).padStart(14, '0')}`,
+    )
     const body = buildStudioSaveBody({
       pipeId: PIPE_ID,
       globalAttrId: GLOBAL_ATTR_ID,
       payload: buildInput(),
       mainRoleDetail: buildRole(),
       userId: '000004550035214806040581',
+      snowIds,
     })
 
     const pipe = asRecord(body.data.pipe)
@@ -88,7 +93,7 @@ describe('pipe-save-builder', () => {
     expect(storyChain).toBeDefined()
 
     expect(Object.keys(body.data.chain)).toHaveLength(13)
-    expect(Object.keys(body.data.wrapper)).toHaveLength(11)
+    expect(Object.keys(body.data.wrapper)).toHaveLength(12)
     expect(Object.keys(body.data.attr)).toHaveLength(2)
     expect(asArray(pipe.out_param)).toHaveLength(4)
 
@@ -137,14 +142,14 @@ describe('pipe-save-builder', () => {
           "attr": 2,
           "chain": 13,
           "out_param": 4,
-          "wrapper": 11,
+          "wrapper": 12,
         },
         "pipe": {
           "cartoon_id": "000005050038131848937472",
           "cover": "https://img.ideaflow.pro/flow-batch/cover.png",
           "id": "000005081734685198434306",
           "name": "三轮预设测试作品",
-          "start_chain_id": "id_1783100000000000",
+          "start_chain_id": "000005083700000000000000",
           "summary": "三轮预设后进入剧情模式",
           "summary_markup": "三轮预设后进入剧情模式",
         },
@@ -154,7 +159,7 @@ describe('pipe-save-builder', () => {
           "unit_id": "000003911971051999346801",
         },
         "top": {
-          "hash": 1783100000001,
+          "hash": 1783100000000,
           "owner_id": "000004550035214806040581",
           "time": 1783100000000,
           "user_id": "000004550035214806040581",
@@ -171,6 +176,7 @@ describe('pipe-save-builder', () => {
           "group_greeting",
           "group_out",
           "cartoons",
+          "constantGreetings",
         ],
       }
     `)
