@@ -356,17 +356,33 @@ export function createCyapiClient(baseUrl: string, studioBaseUrl: string): Cyapi
     },
 
     async pipeAdd(auth, body) {
-      const data = await requestEnvelope<unknown>('studio', studioNodeapiBaseUrl, {
+      // studio /pipe/add 只返回 pipe_id + in_param/out_param 默认结构，
+      // globalAttrId（"特殊变量" attr，schema=wrapper）由后端在建作品时**自动创建**，
+      // 必须紧接着调 /pipe/detail 才能拿到（见 test-run/stage-b0-probe.mjs 实测）
+      const addData = await requestEnvelope<unknown>('studio', studioNodeapiBaseUrl, {
         auth,
         path: '/pipe/add',
         body,
       })
-      if (!isRecord(data)) throw new BizError('UPSTREAM_STUDIO_FAILED', '下游 studio 建作品返回格式异常')
-      const pipeRecord = readRecordField(data, 'pipe')
-      const id = readStringField(data, 'id') ?? (pipeRecord ? readStringField(pipeRecord, 'id') : undefined)
-      const globalAttrId = findGlobalAttrId(data)
-      if (!id || !globalAttrId) {
-        throw new BizError('UPSTREAM_STUDIO_FAILED', '下游 studio 未返回作品 id 或全局配置 id')
+      if (!isRecord(addData)) throw new BizError('UPSTREAM_STUDIO_FAILED', '下游 studio 建作品返回格式异常')
+      const id = readStringField(addData, 'id')
+      if (!id) throw new BizError('UPSTREAM_STUDIO_FAILED', '下游 studio 未返回作品 id')
+
+      // 紧接着拉 detail 拿全局配置 attr id
+      const detailPath =
+        `/pipe/detail?hashs=${encodeURIComponent('{}')}` +
+        `&pipe_id=${encodeURIComponent(id)}` +
+        `&user_id=${encodeURIComponent(auth.uid)}` +
+        `&draft=`
+      const detailData = await requestEnvelope<unknown>('studio', studioNodeapiBaseUrl, {
+        auth,
+        method: 'GET',
+        path: detailPath,
+      })
+      if (!isRecord(detailData)) throw new BizError('UPSTREAM_STUDIO_FAILED', 'studio pipe/detail 返回格式异常')
+      const globalAttrId = findGlobalAttrId(detailData)
+      if (!globalAttrId) {
+        throw new BizError('UPSTREAM_STUDIO_FAILED', 'studio pipe/detail 没找到全局配置 attr id')
       }
       return { id, globalAttrId }
     },
