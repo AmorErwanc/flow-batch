@@ -16,27 +16,47 @@
 import { BizError } from '../lib/errors.js'
 import type { DreamaAuth } from '../http/middleware/dreama-auth.js'
 import type { CreateFlowInput, CreateFlowOutput } from '../routes/flow.js'
+import { getConfig } from '../config.js'
+import { createCyapiClient } from './cyapi-client.js'
+import { buildStudioSaveBody } from './pipe-save-builder.js'
 
 export async function createFlow(
-  _input: CreateFlowInput,
-  _auth: DreamaAuth,
+  input: CreateFlowInput,
+  auth: DreamaAuth,
 ): Promise<CreateFlowOutput> {
-  // TODO codex（PR#4）:
-  //   const client = createCyapiClient(...)
-  //   const { id: pipeId, globalAttrId } = await client.pipeAdd(auth, { user_id, name })
-  //   const mainRole = await client.getCartoonDetail(auth, input.role_ids[0])
-  //   const saveBody = buildStudioSaveBody({ pipeId, globalAttrId, payload: input, mainRoleDetail: mainRole, userId: auth.uid })
-  //   await client.pipeSave(auth, saveBody)
-  //   await client.pipeInitchat(auth, pipeId)
-  //   if (input.publish) {
-  //     await client.pipeCreatorSubmit(auth, pipeId)
-  //   }
-  //   return {
-  //     pipe_id: pipeId,
-  //     publish_status: input.publish ? 'submitted' : 'draft',
-  //     studio_url: `https://studio.ideaflow.pro/pipe.html?pipe_id=${pipeId}`,
-  //   }
+  const mainRoleId = input.role_ids[0]
+  if (!mainRoleId) {
+    throw new BizError('BAD_REQUEST', '创建作品至少需要一个角色')
+  }
+
+  const config = getConfig()
+  const client = createCyapiClient(config.CYAPI_BASE_URL, config.STUDIO_NODEAPI_BASE_URL)
+
+  const { id: pipeId, globalAttrId } = await client.pipeAdd(auth, {
+    user_id: input.user_id,
+    name: input.name,
+  })
+  const mainRole = await client.getCartoonDetail(auth, mainRoleId)
+  const saveBody = buildStudioSaveBody({
+    pipeId,
+    globalAttrId,
+    payload: input,
+    mainRoleDetail: mainRole,
+    userId: auth.uid,
+  })
+
+  await client.pipeSave(auth, saveBody)
 
   // TODO codex（PR#5）: 在 pipeSave 后加 pipeUpdate；在 pipeCreatorSubmit 前加 riskControlTxtBatch
-  throw new BizError('NOT_IMPLEMENTED', 'PR#4 待实现：flow-service 主编排')
+  await client.pipeInitchat(auth, pipeId)
+
+  if (input.publish) {
+    await client.pipeCreatorSubmit(auth, pipeId)
+  }
+
+  return {
+    pipe_id: pipeId,
+    publish_status: input.publish ? 'submitted' : 'draft',
+    studio_url: `https://studio.ideaflow.pro/pipe.html?pipe_id=${pipeId}`,
+  }
 }

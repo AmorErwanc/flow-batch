@@ -41,6 +41,7 @@ export const PUBLIC_ERROR_META = {
   INVALID_ARGUMENT: { apiCode: ApiErrorCode.PARAM_INVALID, httpStatus: 400, errStyle: 'toast' },
   PAYLOAD_TOO_LARGE: { apiCode: ApiErrorCode.PARAM_INVALID, httpStatus: 413, errStyle: 'toast' },
   ROUTE_NOT_FOUND: { apiCode: ApiErrorCode.RESOURCE_NOT_FOUND, httpStatus: 404, errStyle: 'toast' },
+  RESOURCE_NOT_FOUND: { apiCode: ApiErrorCode.RESOURCE_NOT_FOUND, httpStatus: 404, errStyle: 'toast' },
   STATE_CONFLICT: { apiCode: ApiErrorCode.STATE_CONFLICT, httpStatus: 409, errStyle: 'toast' },
   RATE_LIMITED: { apiCode: ApiErrorCode.RATE_LIMITED, httpStatus: 429, errStyle: 'toast' },
   NOT_IMPLEMENTED: { apiCode: ApiErrorCode.NOT_IMPLEMENTED, httpStatus: 501, errStyle: 'page' },
