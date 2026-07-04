@@ -18,6 +18,7 @@
     "rootDir": "src",
     "baseUrl": ".",
     "paths": {
+      "@fastify/helmet": ["src/types/fastify-helmet-shim.d.ts"],
       "@/*": ["src/*"]
     }
   },
