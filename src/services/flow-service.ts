@@ -84,6 +84,13 @@ export async function createFlow(
     user_id: input.user_id,
     name: input.name,
   })
+
+  // 关键：把 studio 侧新建的 pipe 登记到 cyapi 主表。
+  // 缺这一步 pipe 不会进 /creator/pipe-list（"我的作品"列表），
+  // 审核团队后台也看不到，creator/submit 就算 code:0 也不真的进队列。
+  // 顺序跟 Studio UI "新建内容" 抓包一致：pipe/add 之后立刻调。
+  await client.workStudioSave(auth, pipeId)
+
   const mainRole = await client.getCartoonDetail(auth, mainRoleId)
   const saveBody = buildStudioSaveBody({
     pipeId,

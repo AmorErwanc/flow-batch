@@ -41,6 +41,8 @@ export interface CyapiClient {
   getCartoonDetail(auth: DreamaAuth, cartoonId: string): Promise<CartoonDetail>
   // Flow 用：
   pipeAdd(auth: DreamaAuth, body: { user_id: string; name: string }): Promise<{ id: string; globalAttrId: string }>
+  /** 把 studio 侧新建的 pipe 登记到 cyapi 主表 —— 缺这一步 pipe 对 cyapi/审核团队不可见 */
+  workStudioSave(auth: DreamaAuth, pipeId: string): Promise<void>
   pipeSave(auth: DreamaAuth, body: unknown): Promise<void>
   pipeUpdate(auth: DreamaAuth, body: Record<string, unknown>): Promise<void>
   pipeInitchat(auth: DreamaAuth, pipeId: string): Promise<void>
@@ -385,6 +387,18 @@ export function createCyapiClient(baseUrl: string, studioBaseUrl: string): Cyapi
         throw new BizError('UPSTREAM_STUDIO_FAILED', 'studio pipe/detail 没找到全局配置 attr id')
       }
       return { id, globalAttrId }
+    },
+
+    async workStudioSave(auth, pipeId) {
+      // 把 studio 侧的 pipe 登记到 cyapi 主表。缺这一步 pipe 不会出现在
+      // /creator/pipe-list（"我的作品"列表），审核团队后台也看不到，
+      // creator/submit 就算返回 code:0 也不会真的进审核队列。
+      // 抓包顺序：studio/pipe/add 之后立刻调（跟 Studio UI "新建内容"一致）
+      await requestEnvelope<unknown>('cyapi', cyapiBaseUrl, {
+        auth,
+        method: 'POST',
+        path: `/work/studio/save/${encodeURIComponent(pipeId)}`,
+      })
     },
 
     async pipeSave(auth, body) {

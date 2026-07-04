@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   createCyapiClient: vi.fn(),
   client: {
     pipeAdd: vi.fn(),
+    workStudioSave: vi.fn(),
     getCartoonDetail: vi.fn(),
     pipeSave: vi.fn(),
     pipeUpdate: vi.fn(),
