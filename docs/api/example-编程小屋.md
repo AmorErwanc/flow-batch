@@ -212,11 +212,9 @@ https://tools.ideaflow.pro/flow-batch
 
 ---
 
-## 如果你要做 `story` 类型,可以直接改这份模板
+## 剧情类作品的骨架模板(校园探索题材)
 
-下面是一个**可直接套用的 `/flow` 请求体模板**。角色创建、图片生成的步骤不变,只换作品主题和 `category`。
-
-**提醒**:这里主要是给你一个"JSON 该怎么写"的模板。良维当前量产如果没有额外业务约定,最稳妥的 `category` 依然是 `chat`。
+下面是一个**可直接套用的 `/flow` 请求体模板**,题材偏剧情探索。当前 `category` 只支持 `chat`,`story` 分类等造梦次元后端补真实分类 id 后放开;届时把 `category: "chat"` 改成 `"story"` 即可,其他字段不用动。
 
 ```json
 {
@@ -246,7 +244,7 @@ https://tools.ideaflow.pro/flow-batch
   "story": {
     "background": "校园图书馆夜间巡查故事,强调观察、推理、合作,避免恋爱、暴力、惊悚猎奇。"
   },
-  "category": "story",
+  "category": "chat",
   "publish": false
 }
 ```
@@ -258,11 +256,9 @@ https://tools.ideaflow.pro/flow-batch
 
 ---
 
-## 如果你要做 `game` 类型,可以直接改这份模板
+## 游戏类作品的骨架模板(社团任务题材)
 
-下面这个模板更适合"闯关 / 任务 / 选择题"感受,但**按钮依然不会分真实支线**,只是让用户有参与感。
-
-**提醒**:这里同样主要是字段模板。如果你只是批量做当前这类聊天作品,继续用 `category: "chat"` 会更稳。
+下面这个模板更适合"闯关 / 任务 / 选择题"感受,但**按钮依然不会分真实支线**,只是让用户有参与感。当前 `category` 只支持 `chat`,`game` 分类等造梦次元后端补真实分类 id 后放开;届时把 `category: "chat"` 改成 `"game"` 即可,其他字段不用动。
 
 ```json
 {
@@ -296,7 +292,7 @@ https://tools.ideaflow.pro/flow-batch
   "story": {
     "background": "校园社团任务闯关,强调合作、表达、解决问题,避免任何成人化、暴力、危险惩罚。"
   },
-  "category": "game",
+  "category": "chat",
   "publish": false
 }
 ```

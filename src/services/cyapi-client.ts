@@ -326,17 +326,24 @@ export function createCyapiClient(baseUrl: string, studioBaseUrl: string): Cyapi
 
     async applySnowIds(auth, n) {
       if (n <= 0) return []
-      if (n > 50) throw new BizError('BAD_REQUEST', `单次批量申请雪花 id 上限 50，当前 ${n}`)
-      const data = await requestEnvelope<unknown>('cyapi', cyapiBaseUrl, {
-        auth,
-        path: `/cutebox/snowid?n=${n}`,
-      })
-      if (!Array.isArray(data)) {
-        throw new BizError('UPSTREAM_CYAPI_FAILED', '下游 cyapi 未返回批量雪花 id 数组')
-      }
-      const ids = data.filter((item): item is string => typeof item === 'string' && item.length > 0)
-      if (ids.length !== n) {
-        throw new BizError('UPSTREAM_CYAPI_FAILED', `批量雪花 id 数量不匹配：期望 ${n}，实际 ${ids.length}`)
+      // 下游 /cutebox/snowid?n=N 单次上限 50,拆批循环申请直到拿够 n 个
+      const BATCH_SIZE = 50
+      const ids: string[] = []
+      while (ids.length < n) {
+        const remaining = n - ids.length
+        const batchSize = Math.min(remaining, BATCH_SIZE)
+        const data = await requestEnvelope<unknown>('cyapi', cyapiBaseUrl, {
+          auth,
+          path: `/cutebox/snowid?n=${batchSize}`,
+        })
+        if (!Array.isArray(data)) {
+          throw new BizError('UPSTREAM_CYAPI_FAILED', '下游 cyapi 未返回批量雪花 id 数组')
+        }
+        const batch = data.filter((item): item is string => typeof item === 'string' && item.length > 0)
+        if (batch.length !== batchSize) {
+          throw new BizError('UPSTREAM_CYAPI_FAILED', `批量雪花 id 数量不匹配：期望 ${batchSize}，实际 ${batch.length}`)
+        }
+        ids.push(...batch)
       }
       return ids
     },

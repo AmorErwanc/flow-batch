@@ -103,7 +103,7 @@ describe('cyapi-client riskControlTxtBatch', () => {
     expect(warnSpy).toHaveBeenCalledTimes(1)
   })
 
-  it('登录失效不降级，继续抛给上层处理', async () => {
+  it('登录失效不降级，继续抛给上层处理 (风控)', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     vi.stubGlobal(
       'fetch',
@@ -120,5 +120,87 @@ describe('cyapi-client riskControlTxtBatch', () => {
       code: 'DREAMA_TOKEN_INVALID',
     } satisfies Partial<BizError>)
     expect(warnSpy).not.toHaveBeenCalled()
+  })
+})
+
+describe('cyapi-client applySnowIds 拆批', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
+
+  it('n <= 50 一次请求拿完', async () => {
+    const fetchMock = vi.fn(async (_url: string | URL, _init?: RequestInit) =>
+      jsonResponse({
+        code: 0,
+        data: Array.from({ length: 40 }, (_, i) => `id-${i}`),
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const ids = await createClient().applySnowIds(AUTH, 40)
+
+    expect(ids).toHaveLength(40)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('n=40')
+  })
+
+  it('n = 51 拆两批(50 + 1)', async () => {
+    const responses = [
+      Array.from({ length: 50 }, (_, i) => `batch1-${i}`),
+      Array.from({ length: 1 }, (_, i) => `batch2-${i}`),
+    ]
+    let callIdx = 0
+    const fetchMock = vi.fn(async () => {
+      const body = responses[callIdx]
+      callIdx += 1
+      return jsonResponse({ code: 0, data: body })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const ids = await createClient().applySnowIds(AUTH, 51)
+
+    expect(ids).toHaveLength(51)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('n=50')
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain('n=1')
+  })
+
+  it('50 轮预设需要 213 个 id 拆 5 批(50*4 + 13)', async () => {
+    // 50 * 4 + 13 = 213 → 4 批 50 + 1 批 13
+    const batchSizes = [50, 50, 50, 50, 13]
+    let callIdx = 0
+    const fetchMock = vi.fn(async () => {
+      const size = batchSizes[callIdx] as number
+      callIdx += 1
+      const data = Array.from({ length: size }, (_, i) => `b${callIdx}-${i}`)
+      return jsonResponse({ code: 0, data })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const ids = await createClient().applySnowIds(AUTH, 213)
+
+    expect(ids).toHaveLength(213)
+    expect(fetchMock).toHaveBeenCalledTimes(5)
+  })
+
+  it('批量数量不匹配抛 UPSTREAM_CYAPI_FAILED', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => jsonResponse({ code: 0, data: ['only-one'] })),
+    )
+
+    await expect(createClient().applySnowIds(AUTH, 50)).rejects.toMatchObject({
+      code: 'UPSTREAM_CYAPI_FAILED',
+    } satisfies Partial<BizError>)
+  })
+
+  it('n <= 0 不请求下游', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    expect(await createClient().applySnowIds(AUTH, 0)).toEqual([])
+    expect(await createClient().applySnowIds(AUTH, -5)).toEqual([])
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })

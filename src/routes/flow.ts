@@ -51,11 +51,12 @@ const externalStorySchema = z.object({
   background: z.string().min(1).max(2000),
 })
 
-/** 语义化的分类枚举 → 24 位雪花 tag_id 映射(BFF 内部转换) */
-const CATEGORY_TO_TAG_ID: Record<'chat' | 'story' | 'game', string> = {
+/** 语义化的分类枚举 → 24 位雪花 tag_id 映射(BFF 内部转换)
+ * 当前只对外暴露 chat。story/game 需要造梦次元后端补真实 tag_id 后再放开,
+ * 避免"看着支持了实际都落到聊天分类"的语义欺骗。
+ */
+const CATEGORY_TO_TAG_ID: Record<'chat', string> = {
   chat: '000003882999195270660097',
-  story: '000003882999195270660097', // TODO: 待补真实剧情标签 id;暂用聊天,不阻塞良维
-  game: '000003882999195270660097',  // TODO: 同上
 }
 
 /** 对外 schema */
@@ -66,9 +67,10 @@ const externalCreateFlowSchema = z.object({
   main_role_id: z.string().length(24),
   supporting_role_ids: z.array(z.string().length(24)).max(9).optional(),
   opening: z.array(openingSchema).min(1).max(10),
-  preset_turns: z.array(presetTurnSchema).max(20).default([]),
+  // 支持 50 轮:pipe-save-builder 已改造为拆批申请雪花 id,不受下游单次 50 上限约束
+  preset_turns: z.array(presetTurnSchema).max(50).default([]),
   story: externalStorySchema,
-  category: z.enum(['chat', 'story', 'game']).default('chat'),
+  category: z.enum(['chat']).default('chat'),
   publish: z.boolean().default(true),
 }).superRefine((input, ctx) => {
   if (input.publish && !input.cover_url) {

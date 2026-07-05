@@ -52,9 +52,9 @@ curl -X POST https://tools.ideaflow.pro/flow-batch/flow \
 | `main_role_id` | string | ✅ | - | 主角 id(24 位雪花,建角色接口返回的 `character_id`) |
 | `supporting_role_ids` | string[] | ❌ | `[]` | 配角 id 数组,最多 9 个 |
 | `opening` | array | ✅ | - | 开场剧本,**1~10 段**(3 种 type,见下) |
-| `preset_turns` | array | ❌ | `[]` | 预设对话轮,**当前安全上限 9 轮**(见下) |
+| `preset_turns` | array | ❌ | `[]` | 预设对话轮,**0~50 轮**(见下) |
 | `story` | object | ✅ | - | AI 自由对话设定(见下) |
-| `category` | enum | ❌ | `"chat"` | `"chat"` / `"story"` / `"game"` 三选一;**良维当前量产建议固定传 `"chat"`** |
+| `category` | enum | ❌ | `"chat"` | 当前仅支持 `"chat"`;`"story"` / `"game"` 待造梦次元后端补真实分类 id 后再开放 |
 | `publish` | boolean | ❌ | `true` | `true` = 自动提审进审核队列;`false` = 只存草稿 |
 
 ## `opening[i]` 三种 type
@@ -106,7 +106,7 @@ curl -X POST https://tools.ideaflow.pro/flow-batch/flow \
 
 **用途**:让作品开头几轮有"确定引导感",别一上来就 AI 满地跑。跑完所有预设轮后,进入 AI 剧情模式。
 
-**当前上限提醒**:单个作品现在请控制在 **9 轮以内**。再往上不是文案问题,而是建作品过程中会触发下游雪花 id 数量上限。
+**上限 50 轮**:BFF 内部会拆批向下游申请 id,50 轮以内都稳。超过 50 直接返 400。
 
 ## `story`(AI 自由对话设定)
 
@@ -151,7 +151,7 @@ curl -X POST https://tools.ideaflow.pro/flow-batch/flow \
 | code | 触发条件 | 排查 |
 |---|---|---|
 | `4001` + `details.errorCode=DREAMA_TOKEN_INVALID` | 无 `ROLE_SUP_CREATOR` 权限 / 登录过期 | 重新登录后复制新 header,或后台开通超级创作者 |
-| `4002` + `details.errorCode=BAD_REQUEST` | 字段校验失败 / `preset_turns` 超过当前可支持上限 | 看 `details.issues` 或 `message`; 预设轮请控制在 9 轮以内 |
+| `4002` + `details.errorCode=BAD_REQUEST` | 字段校验失败 / `preset_turns` 超过 50 轮 / `category` 不是 `"chat"` | 看 `details.issues` 或 `message` |
 | `4041` + `details.errorCode=RESOURCE_NOT_FOUND` | `main_role_id` 不存在 | 检查是不是用了旧 id、别人的 id、或拼错的 24 位 id |
 | `4291` + `details.errorCode=CONTENT_REJECTED` | 内容命中风控 | `details.rejected` 里是命中的文本片段,把句子改得更中性、更青少年向 |
 | `5021` + `details.errorCode=UPSTREAM_CYAPI_FAILED` / `UPSTREAM_STUDIO_FAILED` | 造梦次元 cyapi / studio 拒绝 | 看 `retryable`; 可重试时先重试,仍失败就带 `requestId` 联系我们 |
