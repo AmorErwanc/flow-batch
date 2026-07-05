@@ -35,13 +35,16 @@ services:
       CYAPI_BASE_URL: https://cyapi.ideaflow.pro
       STUDIO_NODEAPI_BASE_URL: https://studio.ideaflow.pro/nodeapi/ideaflow
 
-      # Loki（同机器 loki 容器）
+      # Loki（loki 在 party-monitoring 网络，flow-batch 同时挂两个网络后可内网直连）
       LOKI_HOST: http://loki:3100
       LOKI_LABELS_APP: flow-batch
       LOKI_LABELS_ENV: prod
 
     networks:
-      - ideaflow-tools
+      # app-net：跟 llm-api 同网，容器内可直连 http://llm-api:8000
+      - app-net
+      # party-monitoring：跟 loki 同网，容器内可直连 http://loki:3100
+      - party-monitoring
 
     healthcheck:
       # 内部 healthcheck 不带鉴权（health 是 auth 白名单）
@@ -51,7 +54,9 @@ services:
       retries: 3
 
 networks:
-  # 加入 ideaflow-tools 已有网络，才能内网访问 llm-api / loki 容器
-  ideaflow-tools:
+  app-net:
     external: true
-    name: ideaflow-tools_default
+    name: app-net
+  party-monitoring:
+    external: true
+    name: party-monitoring
