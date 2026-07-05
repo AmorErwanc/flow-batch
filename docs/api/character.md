@@ -33,9 +33,13 @@ curl -X POST https://tools.ideaflow.pro/flow-batch/character \
 | `summary` | string | ✅ | - | 一句人设简介,1~500 字 |
 | `personality` | string | ✅ | - | 一段性格描述,1~500 字 |
 | `speech_style` | string | ✅ | - | 一段说话习惯/口头禅描述,1~500 字 |
-| `timbre_id` | string | ❌ | 按性别自动选默认音色 | 指定音色 id;不传 BFF 自动按性别拉一个默认音色 |
+| `timbre_id` | string | ❌ | 按性别自动选默认音色 | 指定音色 id;**良维当前批量场景一般不用传** |
 
 **BFF 内部固定处理**:头像/形象图默认标记为 AI 生成(合规必需),无需你传标记字段。
+
+**良维当前最小可用输入**:把前 8 个字段填好就够了。`timbre_id` 只有在你明确要锁定某个音色时才需要。
+
+**图片坑位提醒**:`avatar_url` / `banner_url` 最好只用 `/flow-batch/image` 返回的 `img.ideaflow.pro` URL。不是这个域名时,本接口不一定立刻报错,但作品进 Studio 后很容易裂图。
 
 ## 响应
 
@@ -55,6 +59,6 @@ curl -X POST https://tools.ideaflow.pro/flow-batch/character \
 
 | code | 触发条件 | 排查 |
 |---|---|---|
-| `4001` `AUTH_FAILED` | 无 `ROLE_SUP_CREATOR` 权限 | 后台申请开通超级创作者 |
-| `4004` `BAD_REQUEST` | 图片 URL 不是 `img.ideaflow.pro` 域名 / 字段超长 | 看 `message` 定位 |
-| `5002` `UPSTREAM_CYAPI_FAILED` | 造梦次元 cyapi 拒绝 / 网络故障 | 看 `details.upstream` |
+| `4001` + `details.errorCode=DREAMA_TOKEN_INVALID` | 无 `ROLE_SUP_CREATOR` 权限 / 登录过期 | 重新登录后复制新 header,或后台申请开通超级创作者 |
+| `4002` + `details.errorCode=BAD_REQUEST` | 字段缺失、超长、格式不对 | 看 `details.issues` 或 `message` 定位 |
+| `5021` + `details.errorCode=UPSTREAM_CYAPI_FAILED` | 造梦次元 cyapi 拒绝 / 网络故障 / 默认音色没拉到 | 看 `details.upstream` 或带 `requestId` 联系我们 |

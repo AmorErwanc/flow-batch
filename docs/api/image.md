@@ -21,11 +21,13 @@ curl -X POST https://tools.ideaflow.pro/flow-batch/image \
 | 字段 | 类型 | 必填 | 默认 | 说明 |
 |---|---|---|---|---|
 | `prompt` | string | ✅ | - | 生图描述,自然语言,1~2000 字 |
-| `size` | string | ❌ | `"2048x2048"` | 图片尺寸,`"宽x高"` 格式;常用:`2048x2048` 方形 / `1024x2048` 竖 / `2048x1024` 横 |
+| `size` | string | ❌ | `"2048x2048"` | 图片尺寸,`"宽x高"` 格式;**当前量产请统一传 `2048x2048`**,非方形在 Seedream 4.5 上经常直接 400 |
 | `max_images` | number | ❌ | `1` | 一次生几张,1~15 |
 | `reference_urls` | string[] | ❌ | - | 参考图 URL 数组(图生图用),最多 14 张 |
-| `generation_mode` | enum | ❌ | - | `"single"` / `"set"`,一般不用传 |
-| `call_type` | string | ❌ | - | 业务标签(如 `"batch-avatar"`),便于账单/日志追溯 |
+| `generation_mode` | enum | ❌ | - | `"single"` / `"set"`;纯文生图一般不用传 |
+| `call_type` | string | ❌ | - | 业务标签(如 `"batch-avatar"`),便于日志追溯;不影响作品内容 |
+
+**良维当前最小可用请求**:只传 `prompt`、`size`、`max_images` 就够了。后面 3 个字段可以先忽略。
 
 ## 响应
 
@@ -50,5 +52,6 @@ curl -X POST https://tools.ideaflow.pro/flow-batch/image \
 
 | code | 触发条件 | 排查 |
 |---|---|---|
-| `5001` `UPSTREAM_LLM_FAILED` | 上游 llm-api 生图失败(限流/模型 500/超时) | `details.upstream` 里有原始错误;`retryable=true` 直接重试 |
-| `4004` `BAD_REQUEST` | prompt 空 / size 格式错 / max_images 超限 | 看 `message` 定位字段 |
+| `4002` + `details.errorCode=BAD_REQUEST` | prompt 空 / size 格式错 / max_images 超限 | 看 `details.issues` 或 `message` 定位字段 |
+| `5021` + `details.errorCode=UPSTREAM_LLM_FAILED` | 上游 llm-api 生图失败(限流/模型 500/超时) | `details.upstream` 里有原始错误;`retryable=true` 时直接重试 |
+| `5021` + `details.errorCode=UPSTREAM_CYAPI_FAILED` | 转存到 `img.ideaflow.pro` 失败 | 先重试一次;仍失败就带 `requestId` 联系我们 |

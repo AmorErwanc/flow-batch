@@ -52,9 +52,9 @@ curl -X POST https://tools.ideaflow.pro/flow-batch/flow \
 | `main_role_id` | string | ✅ | - | 主角 id(24 位雪花,建角色接口返回的 `character_id`) |
 | `supporting_role_ids` | string[] | ❌ | `[]` | 配角 id 数组,最多 9 个 |
 | `opening` | array | ✅ | - | 开场剧本,**1~10 段**(3 种 type,见下) |
-| `preset_turns` | array | ❌ | `[]` | 预设对话轮,**0~20 轮**(见下) |
-| `story` | object | ✅ | - | AI 剧情配置(见下) |
-| `category` | enum | ❌ | `"chat"` | `"chat"` / `"story"` / `"game"` 三选一 |
+| `preset_turns` | array | ❌ | `[]` | 预设对话轮,**当前安全上限 9 轮**(见下) |
+| `story` | object | ✅ | - | AI 自由对话设定(见下) |
+| `category` | enum | ❌ | `"chat"` | `"chat"` / `"story"` / `"game"` 三选一;**良维当前量产建议固定传 `"chat"`** |
 | `publish` | boolean | ❌ | `true` | `true` = 自动提审进审核队列;`false` = 只存草稿 |
 
 ## `opening[i]` 三种 type
@@ -90,6 +90,8 @@ curl -X POST https://tools.ideaflow.pro/flow-batch/flow \
 - `user_btns` 可选,最多 20 个
 - 按钮点哪个都走**同一路径**(造梦次元本身不做真分支,只是给玩家一个"我参与了"的感觉)
 - `role_id` 必须是本作品用到的角色 id
+- 如果这里引用的是配角,记得先把它放进 `supporting_role_ids`
+- 如果你根本不需要“点一下按钮再继续”的体验,`user_btns` 可以不传
 
 ## `preset_turns[i]`(可选,预设对话轮)
 
@@ -104,7 +106,9 @@ curl -X POST https://tools.ideaflow.pro/flow-batch/flow \
 
 **用途**:让作品开头几轮有"确定引导感",别一上来就 AI 满地跑。跑完所有预设轮后,进入 AI 剧情模式。
 
-## `story`(AI 剧情配置)
+**当前上限提醒**:单个作品现在请控制在 **9 轮以内**。再往上不是文案问题,而是建作品过程中会触发下游雪花 id 数量上限。
+
+## `story`(AI 自由对话设定)
 
 ```json
 {
@@ -117,6 +121,8 @@ curl -X POST https://tools.ideaflow.pro/flow-batch/flow \
 | `background` | 剧情背景 / 世界观 / 内容尺度约束,1~2000 字 |
 
 **AI 参数(温度/top_p/max_tokens)由 BFF 内部按业务场景调好默认**,你不用传。
+
+你可以把 `story.background` 理解成:"预设几轮结束后,AI 接下来要按照什么世界观、语气和边界继续聊。"
 
 ## 响应
 
@@ -144,13 +150,15 @@ curl -X POST https://tools.ideaflow.pro/flow-batch/flow \
 
 | code | 触发条件 | 排查 |
 |---|---|---|
-| `4001` `AUTH_FAILED` | 无 `ROLE_SUP_CREATOR` 权限 | 后台开通超级创作者 |
-| `4003` `CONTENT_REJECTED` | 内容命中风控 | `details.rejected` 里是命中的文本片段,人工改内容(常见:涉政/涉黄/涉暴) |
-| `4004` `BAD_REQUEST` | 字段校验失败 | 看 `message` 定位 |
-| `5002` `UPSTREAM_CYAPI_FAILED` | 造梦次元 cyapi 拒绝 | 看 `details.upstream` |
+| `4001` + `details.errorCode=DREAMA_TOKEN_INVALID` | 无 `ROLE_SUP_CREATOR` 权限 / 登录过期 | 重新登录后复制新 header,或后台开通超级创作者 |
+| `4002` + `details.errorCode=BAD_REQUEST` | 字段校验失败 / `preset_turns` 超过当前可支持上限 | 看 `details.issues` 或 `message`; 预设轮请控制在 9 轮以内 |
+| `4041` + `details.errorCode=RESOURCE_NOT_FOUND` | `main_role_id` 不存在 | 检查是不是用了旧 id、别人的 id、或拼错的 24 位 id |
+| `4291` + `details.errorCode=CONTENT_REJECTED` | 内容命中风控 | `details.rejected` 里是命中的文本片段,把句子改得更中性、更青少年向 |
+| `5021` + `details.errorCode=UPSTREAM_CYAPI_FAILED` / `UPSTREAM_STUDIO_FAILED` | 造梦次元 cyapi / studio 拒绝 | 看 `retryable`; 可重试时先重试,仍失败就带 `requestId` 联系我们 |
 
 ## 注意事项
 
 1. **`publish=true` 就真进审核队列了**。测试时用 `publish=false`,验证作品结构 OK 再改回 `true` 提审。
 2. **审核队列索引有几分钟延迟** —— 提审后立刻查后台可能 total=0,不代表失败,等 3-5 分钟。
 3. **风控是提审前必过的**,`publish=false` 时不会跑风控;`true` 时才会。
+4. **如果你现在做的是良维这类批量聊天作品,`category` 最稳妥的选法就是固定传 `chat`。**
