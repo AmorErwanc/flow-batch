@@ -16,14 +16,15 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { createCharacter } from '../services/character-service.js'
+import { imgIdeaflowUrlSchema } from './schema-helpers.js'
 
 /** 对外 schema:良维实际填的字段 */
 const externalCreateCharacterSchema = z.object({
   name: z.string().min(1).max(50),
   gender: z.enum(['男', '女', '未知']),
   age: z.number().int().min(0).max(200).nullable(),
-  avatar_url: z.string().url(),
-  banner_url: z.string().url(),
+  avatar_url: imgIdeaflowUrlSchema,
+  banner_url: imgIdeaflowUrlSchema,
   summary: z.string().min(1).max(500),
   personality: z.string().min(1).max(500),
   speech_style: z.string().min(1).max(500),

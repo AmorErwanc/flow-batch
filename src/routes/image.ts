@@ -19,7 +19,7 @@ import { generateImage } from '../services/image-service.js'
 /** 对外 schema */
 const externalGenerateImageSchema = z.object({
   prompt: z.string().min(1, 'prompt 不能为空').max(2000),
-  size: z.string().default('2048x2048'),
+  size: z.string().regex(/^\d+x\d+$/, 'size 必须是 "宽x高" 格式').default('2048x2048'),
   max_images: z.coerce.number().int().min(1).max(15).default(1),
   reference_urls: z.array(z.string().url()).max(14).optional(),
   generation_mode: z.enum(['single', 'set']).optional(),

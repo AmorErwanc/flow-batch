@@ -15,6 +15,7 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { createFlow } from '../services/flow-service.js'
+import { imgIdeaflowUrlSchema } from './schema-helpers.js'
 
 /** 对外 opening 三种 type(background 就是内部的 system) */
 const backgroundOpeningSchema = z.object({
@@ -29,9 +30,9 @@ const narrationOpeningSchema = z.object({
 const roleOpeningSchema = z.object({
   type: z.literal('role'),
   content: z.string().min(1),
-  role_id: z.string().min(1),
+  role_id: z.string().length(24),
   /** 用户回复按钮文案数组,支持多个;按钮点击后走同一路径(不做真分支) */
-  user_btns: z.array(z.string().min(1)).max(20).optional(),
+  user_btns: z.array(z.string().min(1)).min(1).max(20).optional(),
 })
 const openingSchema = z.discriminatedUnion('type', [
   backgroundOpeningSchema,
@@ -60,7 +61,7 @@ const CATEGORY_TO_TAG_ID: Record<'chat' | 'story' | 'game', string> = {
 /** 对外 schema */
 const externalCreateFlowSchema = z.object({
   name: z.string().min(1).max(100),
-  cover_url: z.string().url().optional(),
+  cover_url: imgIdeaflowUrlSchema.optional(),
   summary: z.string().min(1).max(500).optional(),
   main_role_id: z.string().length(24),
   supporting_role_ids: z.array(z.string().length(24)).max(9).optional(),
@@ -69,6 +70,33 @@ const externalCreateFlowSchema = z.object({
   story: externalStorySchema,
   category: z.enum(['chat', 'story', 'game']).default('chat'),
   publish: z.boolean().default(true),
+}).superRefine((input, ctx) => {
+  if (input.publish && !input.cover_url) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['cover_url'],
+      message: 'publish=true 时必须提供 cover_url',
+    })
+  }
+
+  if (input.publish && !input.summary) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['summary'],
+      message: 'publish=true 时必须提供 summary',
+    })
+  }
+
+  const roleIds = new Set([input.main_role_id, ...(input.supporting_role_ids ?? [])])
+  input.opening.forEach((opening, index) => {
+    if (opening.type === 'role' && !roleIds.has(opening.role_id)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['opening', index, 'role_id'],
+        message: 'role_id 必须等于 main_role_id 或 supporting_role_ids 里的某个角色',
+      })
+    }
+  })
 })
 
 /** 内部 greeting 三种 type(system = 对外的 background) */
