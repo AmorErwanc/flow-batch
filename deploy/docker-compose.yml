@@ -48,7 +48,8 @@ services:
 
     healthcheck:
       # 内部 healthcheck 不带鉴权（health 是 auth 白名单）
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/flow-batch/health"]
+      # 用 127.0.0.1 显式 IPv4,避免 alpine 里 localhost 优先解析成 IPv6 而 Fastify 只 listen v4
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:3000/flow-batch/health"]
       interval: 30s
       timeout: 5s
       retries: 3
