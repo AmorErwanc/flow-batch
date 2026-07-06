@@ -106,6 +106,22 @@ describe('pipe-save-builder', () => {
     expect(JSON.stringify(wrapperJson.greetings)).toContain(ROLE_ID)
     expect(JSON.stringify(storyChain)).toContain(ROLE_ID)
 
+    // 良维 2026-07-06 反馈:开场里角色说话段 + preset_turns 每轮 reply 默认开朗读,
+    // 背景/旁白/AI 自由对话段不开。
+    const readFlags = (bubbles: unknown[]): boolean[] =>
+      bubbles.map((bubble) => {
+        const contentArr = asArray(asRecord(bubble).content)
+        const subs = contentArr.flatMap((c) => asArray(asRecord(c).sub))
+        return subs.some((sub) => asRecord(sub).inName === 'read' && asRecord(sub).val === true)
+      })
+
+    const greetings = asArray(wrapperJson.greetings)
+    // 输入顺序:system / narration / role → 只有 role 段开朗读
+    expect(readFlags(greetings)).toEqual([false, false, true])
+
+    // out_param 顺序:3 段 preset_turns + 1 段 dynamic(AI 自由对话)→ 只有 preset 段开朗读
+    expect(readFlags(asArray(pipe.out_param))).toEqual([true, true, true, false])
+
     const storyInParam = asArray(storyChain?.in_param)
     const initChatParam = storyInParam.map(asRecord).find((item) => item.inName === 'initChat')
     expect(initChatParam).toBeDefined()

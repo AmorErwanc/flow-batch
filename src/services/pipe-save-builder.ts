@@ -251,8 +251,8 @@ function buildBtnEvent(btnText: string): Record<string, unknown> {
   }
 }
 
-function buildReadSub(): Record<string, unknown>[] {
-  return [{ val: false, type: 'bool', inName: 'read' }]
+function buildReadSub(read: boolean): Record<string, unknown>[] {
+  return [{ val: read, type: 'bool', inName: 'read' }]
 }
 
 function buildGreetingsWrapperContent(payload: CreateFlowInput): Record<string, unknown>[] {
@@ -266,14 +266,14 @@ function buildGreetingsWrapperContent(payload: CreateFlowInput): Record<string, 
         reader: null,
         content: [
           {
-            sub: buildReadSub(),
+            sub: buildReadSub(false),
             val: greeting.title ?? '背景介绍',
             type: 'str',
             props: [],
             inName: 'title',
           },
           {
-            sub: buildReadSub(),
+            sub: buildReadSub(false),
             val: greeting.content,
             type: 'str',
             props: [],
@@ -290,7 +290,7 @@ function buildGreetingsWrapperContent(payload: CreateFlowInput): Record<string, 
         type: 'narration',
         event: [],
         reader: null,
-        content: [{ sub: buildReadSub(), val: greeting.content, type: 'str', props: [], inName: 'none' }],
+        content: [{ sub: buildReadSub(false), val: greeting.content, type: 'str', props: [], inName: 'none' }],
       }
     }
 
@@ -301,7 +301,7 @@ function buildGreetingsWrapperContent(payload: CreateFlowInput): Record<string, 
       type: 'normal',
       event: (greeting.user_btns ?? []).map(buildBtnEvent),
       reader: null,
-      content: [{ sub: buildReadSub(), val: greeting.content, type: 'str', props: [] }],
+      content: [{ sub: buildReadSub(true), val: greeting.content, type: 'str', props: [] }],
     }
   })
 }
@@ -660,7 +660,7 @@ function buildOutParams(payload: CreateFlowInput, chainIds: TurnChainIds[], stor
       type: 'normal',
       event: turn.buttons.map(buildBtnEvent),
       reader: buildReaderCartoon(roleId),
-      content: [{ sub: buildReadSub(), val: '', type: 'str', chainId: ids.text, outName: 'prompt' }],
+      content: [{ sub: buildReadSub(true), val: '', type: 'str', chainId: ids.text, outName: 'prompt' }],
     }
   })
 
@@ -672,7 +672,7 @@ function buildOutParams(payload: CreateFlowInput, chainIds: TurnChainIds[], stor
       type: 'dynamic',
       event: [],
       reader: buildReaderPlain(),
-      content: [{ sub: buildReadSub(), val: '', type: 'json', inName: 'none', chainId: storyChainId, outName: 'outPut' }],
+      content: [{ sub: buildReadSub(false), val: '', type: 'json', inName: 'none', chainId: storyChainId, outName: 'outPut' }],
     },
   ]
 }
