@@ -21,13 +21,22 @@ curl -X POST https://tools.ideaflow.pro/flow-batch/image \
 | 字段 | 类型 | 必填 | 默认 | 说明 |
 |---|---|---|---|---|
 | `prompt` | string | ✅ | - | 生图描述,自然语言,1~2000 字 |
-| `size` | string | ❌ | `"2048x2048"` | 图片尺寸,`"宽x高"` 格式;**当前量产请统一传 `2048x2048`**,非方形在 Seedream 4.5 上经常直接 400 |
-| `max_images` | number | ❌ | `1` | 一次生几张,1~15 |
+| `size` | string | ❌ | `"2048x2048"` | 图片尺寸,`"宽x高"` 格式;Seedream 4.5 上量产请统一传 `2048x2048`(非方形常直接 400);`gpt-image-2` 也接受比例值如 `"16:9"` |
+| `max_images` | number | ❌ | `1` | 一次生几张,1~15(`gpt-image-2` 上游上限 10) |
 | `reference_urls` | string[] | ❌ | - | 参考图 URL 数组(图生图用),最多 14 张 |
-| `generation_mode` | enum | ❌ | - | `"single"` / `"set"`;纯文生图一般不用传 |
+| `model` | enum | ❌ | `"doubao-seedream-4.5"` | 生图模型:`"doubao-seedream-4.5"`(即梦,默认) / `"gpt-image-2"`(OpenAI GPT Image 2,多渠道兜底) |
 | `call_type` | string | ❌ | - | 业务标签(如 `"batch-avatar"`),便于日志追溯;不影响作品内容 |
 
-**良维当前最小可用请求**:只传 `prompt`、`size`、`max_images` 就够了。后面 3 个字段可以先忽略。
+### `gpt-image-2` 专有可选字段(传给 seedream 会被忽略)
+
+| 字段 | 类型 | 默认 | 说明 |
+|---|---|---|---|
+| `quality` | enum | `"medium"`(上游) | `"low"` / `"medium"` / `"high"` |
+| `background` | enum | `"auto"`(上游) | `"auto"` / `"opaque"`;**不支持 `"transparent"`**,当前部署会 400 |
+| `moderation` | enum | `"low"`(上游) | `"auto"` / `"low"` |
+| `provider_channel` | enum | `"auto"` | 指定渠道:`"kapon"` / `"wuyin"` / `"aiclound"` / `"azure"` / `"azure:westus3"` / `"azure:polandcentral"` / `"azure:uaenorth"`;默认 `auto` 会按 `kapon → wuyin → aiclound → azure` 顺序自动兜底 |
+
+**良维当前最小可用请求**:只传 `prompt`、`size`、`max_images` 就够了。其他字段可以先忽略。
 
 ## 响应
 

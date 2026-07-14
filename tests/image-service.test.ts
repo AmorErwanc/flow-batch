@@ -17,7 +17,7 @@ const auth: DreamaAuth = {
   uid: '000004550035214806040581',
 }
 
-function buildInput(): GenerateImageInput {
+function buildInput(overrides: Partial<GenerateImageInput> = {}): GenerateImageInput {
   return {
     prompt: '一张青少年模式测试图',
     aspect_ratio: '2048x2048',
@@ -26,8 +26,9 @@ function buildInput(): GenerateImageInput {
       'https://img.ideaflow.pro/ref/a.jpg',
       'https://img.ideaflow.pro/ref/b.jpg',
     ],
-    generation_mode: 'set',
+    model: 'doubao-seedream-4.5',
     call_type: '青少年模式批量-测试',
+    ...overrides,
   }
 }
 
@@ -105,18 +106,21 @@ describe('image-service', () => {
       'X-API-Key': 'test-llm-key',
       'Content-Type': 'application/json',
     })
-    expect(JSON.parse(String(llmInit.body))).toMatchObject({
+    const parsedBody = JSON.parse(String(llmInit.body)) as Record<string, unknown>
+    expect(parsedBody).toMatchObject({
       model: 'doubao-seedream-4.5',
       prompt: '一张青少年模式测试图',
       aspect_ratio: '2048x2048',
       max_images: 2,
-      generation_mode: 'set',
       reference_images: [
         'https://img.ideaflow.pro/ref/a.jpg',
         'https://img.ideaflow.pro/ref/b.jpg',
       ],
       call_type: '青少年模式批量-测试',
     })
+    expect(parsedBody).not.toHaveProperty('generation_mode')
+    expect(parsedBody).not.toHaveProperty('quality')
+    expect(parsedBody).not.toHaveProperty('provider_channel')
 
     expect(mocks.createCyapiClient).toHaveBeenCalledWith(
       'https://cyapi.ideaflow.pro',
@@ -137,6 +141,84 @@ describe('image-service', () => {
       expect.any(Blob),
       expect.stringMatching(/^img-\d+-1-[0-9a-z]+\.jpg$/),
     )
+  })
+
+  it('gpt-image-2 分支透传 quality/background/moderation/provider_channel，且不带 generation_mode', async () => {
+    const fetchMock = vi.fn(async (url: string | URL | Request) => {
+      const requestUrl = String(url)
+      if (requestUrl.endsWith('/image/generate')) {
+        return jsonResponse({
+          code: 0,
+          data: {
+            image_urls: [
+              'https://tools.ideaflow.pro/api/storage/preview?key=x.png',
+              'https://tools.ideaflow.pro/api/storage/preview?key=y.png',
+            ],
+          },
+        })
+      }
+      return imageResponse()
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { generateImage } = await import('../src/services/image-service.js')
+    await generateImage(
+      buildInput({
+        model: 'gpt-image-2',
+        quality: 'high',
+        background: 'opaque',
+        moderation: 'low',
+        provider_channel: 'kapon',
+      }),
+      auth,
+    )
+
+    const llmInit = fetchMock.mock.calls[0]?.[1] as RequestInit
+    const parsed = JSON.parse(String(llmInit.body)) as Record<string, unknown>
+    expect(parsed).toMatchObject({
+      model: 'gpt-image-2',
+      quality: 'high',
+      background: 'opaque',
+      moderation: 'low',
+      provider_channel: 'kapon',
+    })
+    expect(parsed).not.toHaveProperty('generation_mode')
+  })
+
+  it('seedream 分支即使传了 gpt-image-2 专有字段也不会带上游', async () => {
+    const fetchMock = vi.fn(async (url: string | URL | Request) => {
+      const requestUrl = String(url)
+      if (requestUrl.endsWith('/image/generate')) {
+        return jsonResponse({
+          code: 0,
+          data: {
+            image_urls: [
+              'https://tools.ideaflow.pro/api/storage/preview?key=x.jpg',
+              'https://tools.ideaflow.pro/api/storage/preview?key=y.jpg',
+            ],
+          },
+        })
+      }
+      return imageResponse()
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { generateImage } = await import('../src/services/image-service.js')
+    await generateImage(
+      buildInput({
+        model: 'doubao-seedream-4.5',
+        quality: 'high',
+        provider_channel: 'azure',
+      }),
+      auth,
+    )
+
+    const llmInit = fetchMock.mock.calls[0]?.[1] as RequestInit
+    const parsed = JSON.parse(String(llmInit.body)) as Record<string, unknown>
+    expect(parsed.model).toBe('doubao-seedream-4.5')
+    expect(parsed).not.toHaveProperty('quality')
+    expect(parsed).not.toHaveProperty('provider_channel')
+    expect(parsed).not.toHaveProperty('generation_mode')
   })
 
   it('llm-api 返回业务失败时抛 UPSTREAM_LLM_FAILED', async () => {

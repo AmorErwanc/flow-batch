@@ -22,7 +22,14 @@ const externalGenerateImageSchema = z.object({
   size: z.string().regex(/^\d+x\d+$/, 'size 必须是 "宽x高" 格式').default('2048x2048'),
   max_images: z.coerce.number().int().min(1).max(15).default(1),
   reference_urls: z.array(z.string().url()).max(14).optional(),
-  generation_mode: z.enum(['single', 'set']).optional(),
+  model: z.enum(['doubao-seedream-4.5', 'gpt-image-2']).default('doubao-seedream-4.5'),
+  // 下面 4 个仅 gpt-image-2 生效；传给 seedream 会被忽略
+  quality: z.enum(['low', 'medium', 'high']).optional(),
+  background: z.enum(['auto', 'opaque']).optional(),
+  moderation: z.enum(['auto', 'low']).optional(),
+  provider_channel: z
+    .enum(['auto', 'kapon', 'wuyin', 'aiclound', 'azure', 'azure:westus3', 'azure:polandcentral', 'azure:uaenorth'])
+    .optional(),
   call_type: z.string().max(64).optional(),
 })
 
@@ -35,7 +42,20 @@ export interface GenerateImageInput {
   aspect_ratio: string
   max_images: number
   reference_urls?: string[] | undefined
-  generation_mode?: 'single' | 'set' | undefined
+  model: 'doubao-seedream-4.5' | 'gpt-image-2'
+  quality?: 'low' | 'medium' | 'high' | undefined
+  background?: 'auto' | 'opaque' | undefined
+  moderation?: 'auto' | 'low' | undefined
+  provider_channel?:
+    | 'auto'
+    | 'kapon'
+    | 'wuyin'
+    | 'aiclound'
+    | 'azure'
+    | 'azure:westus3'
+    | 'azure:polandcentral'
+    | 'azure:uaenorth'
+    | undefined
   call_type?: string | undefined
 }
 
@@ -54,7 +74,11 @@ export async function imageRoute(app: FastifyInstance): Promise<void> {
       aspect_ratio: external.size,
       max_images: external.max_images,
       reference_urls: external.reference_urls,
-      generation_mode: external.generation_mode,
+      model: external.model,
+      quality: external.quality,
+      background: external.background,
+      moderation: external.moderation,
+      provider_channel: external.provider_channel,
       call_type: external.call_type,
     }
 

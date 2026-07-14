@@ -5,10 +5,11 @@
  *   1. POST `${LLM_API_BASE_URL}/image/generate`
  *      Headers: X-API-Key: ${LLM_API_KEY}
  *      Body: {
- *        model: 'doubao-seedream-4.5',
+ *        model: 'doubao-seedream-4.5' | 'gpt-image-2',
  *        prompt, aspect_ratio, max_images,
  *        reference_images: reference_urls,
- *        generation_mode, call_type,
+ *        call_type,
+ *        // gpt-image-2 专有: quality / background / moderation / provider_channel
  *      }
  *      → response.data.image_urls[]（tools 域名 URL）
  *
@@ -78,6 +79,21 @@ async function fetchLlmImages(input: GenerateImageInput): Promise<string[]> {
   const url = `${normalizeBaseUrl(config.LLM_API_BASE_URL)}/image/generate`
   let response: Response
 
+  const upstreamBody: Record<string, unknown> = {
+    model: input.model,
+    prompt: input.prompt,
+    aspect_ratio: input.aspect_ratio,
+    max_images: input.max_images,
+    reference_images: input.reference_urls,
+    call_type: input.call_type,
+  }
+  if (input.model === 'gpt-image-2') {
+    if (input.quality !== undefined) upstreamBody.quality = input.quality
+    if (input.background !== undefined) upstreamBody.background = input.background
+    if (input.moderation !== undefined) upstreamBody.moderation = input.moderation
+    if (input.provider_channel !== undefined) upstreamBody.provider_channel = input.provider_channel
+  }
+
   try {
     response = await fetch(url, {
       method: 'POST',
@@ -85,15 +101,7 @@ async function fetchLlmImages(input: GenerateImageInput): Promise<string[]> {
         'X-API-Key': config.LLM_API_KEY,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        model: 'doubao-seedream-4.5',
-        prompt: input.prompt,
-        aspect_ratio: input.aspect_ratio,
-        max_images: input.max_images,
-        generation_mode: input.generation_mode,
-        reference_images: input.reference_urls,
-        call_type: input.call_type,
-      }),
+      body: JSON.stringify(upstreamBody),
     })
   } catch (error) {
     throw new BizError('UPSTREAM_LLM_FAILED', 'llm-api 生图失败', {
